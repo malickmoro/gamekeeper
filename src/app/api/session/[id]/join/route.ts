@@ -19,10 +19,13 @@ export async function POST(
 
     const { id: sessionId } = await params
 
-    // Find the game session
-    const gameSessionData = await prisma.gameSession.findUnique({
+    // Find the game session by ID or code
+    const gameSessionData = await prisma.gameSession.findFirst({
       where: {
-        id: sessionId,
+        OR: [
+          { id: sessionId },
+          { code: sessionId }
+        ],
         isActive: true
       },
       include: {
@@ -57,14 +60,14 @@ export async function POST(
       // Add user as participant
       await prisma.participant.create({
         data: {
-          gameSessionId: sessionId,
+          gameSessionId: gameSessionData.id,
           userId: session.user.id
         }
       })
 
       // Fetch updated session data
       const updatedSession = await prisma.gameSession.findUnique({
-        where: { id: sessionId },
+        where: { id: gameSessionData.id },
         include: {
           game: true,
           participants: {
