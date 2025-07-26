@@ -77,7 +77,7 @@ model Game {
 
 model GameSession {
   id           String        @id @default(cuid())
-  code         String        @unique @default(cuid())
+  code         String        @unique
   game         Game          @relation(fields: [gameId], references: [id])
   gameId       String
   createdBy    User          @relation("CreatedSessions", fields: [creatorId], references: [id])

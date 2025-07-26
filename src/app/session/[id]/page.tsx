@@ -99,6 +99,16 @@ export default function SessionPage() {
           })
           setScoreFormData(prev => ({ ...prev, goals: initialGoals }))
         }
+
+        // Check if user is already a participant
+        const isParticipant = data.session.participants.some(
+          (p: Participant) => p.user.id === session?.user?.id
+        )
+
+        // If not a participant, automatically join the session
+        if (!isParticipant && session?.user?.id) {
+          await joinSession()
+        }
       } else if (response.status === 404) {
         setError('Session not found')
       } else {
@@ -201,10 +211,14 @@ export default function SessionPage() {
         [userId]: goals
       }
       
-      // Auto-determine winner based on goals
-      const winner = Object.keys(newGoals).reduce((a, b) => 
-        newGoals[a] > newGoals[b] ? a : b
-      )
+      // Determine winner or draw based on goals
+      const goalValues = Object.values(newGoals)
+      const maxGoals = Math.max(...goalValues)
+      const playersWithMaxGoals = Object.keys(newGoals).filter(id => newGoals[id] === maxGoals)
+      
+      // Check if it's a draw (multiple players with same max score) or if all scores are 0
+      const isDraw = playersWithMaxGoals.length > 1 || (maxGoals === 0 && goalValues.every(g => g === 0))
+      const winner = isDraw ? 'DRAW' : playersWithMaxGoals[0]
       
       return {
         ...prev,
@@ -284,20 +298,20 @@ export default function SessionPage() {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="text-indigo-600 hover:text-indigo-500">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm sm:text-base">
                 ← Back to Home
               </Link>
-              <h1 className="text-3xl font-bold text-gray-900">GameKeeper</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">GameKeeper</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <span className="text-gray-700 text-sm sm:text-base truncate">
                 {session.user.username || session.user.email}
               </span>
               <Link
                 href="/settings"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium text-center"
               >
                 Settings
               </Link>
@@ -306,8 +320,8 @@ export default function SessionPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-4 sm:py-6">
           {/* Messages */}
           {error && (
             <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -320,20 +334,20 @@ export default function SessionPage() {
             </div>
           )}
 
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
             {/* Session Info */}
-            <div className="lg:col-span-2">
-              <div className="bg-white shadow rounded-lg p-6 mb-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
+            <div className="lg:col-span-2 order-2 lg:order-1">
+              <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 space-y-2 sm:space-y-0">
+                  <div className="flex-1">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                       {gameSession.game.name} Session
                     </h2>
                     <p className="text-sm text-gray-600">
                       Created by {gameSession.createdBy.username || gameSession.createdBy.email}
                     </p>
-                    <p className="text-sm text-gray-600">
-                      Session Code: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{gameSession.code}</span>
+                    <p className="text-sm text-gray-600 break-all sm:break-normal">
+                      Session Code: <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs sm:text-sm">{gameSession.code}</span>
                     </p>
                     {gameSession.timeElapsed && (
                       <p className="text-xs text-gray-500 mt-1">
@@ -375,10 +389,20 @@ export default function SessionPage() {
                           ⚽ FIFA Match Result
                         </h4>
                         {scoreFormData.winner && (
-                          <div className="mb-4 p-2 bg-green-100 rounded text-sm">
-                            🏆 <strong>Winner:</strong> {gameSession.participants.find(p => p.user.id === scoreFormData.winner)?.user.username || 'Unknown'}
-                            <br />
-                            📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
+                          <div className={`mb-4 p-2 rounded text-sm ${scoreFormData.winner === 'DRAW' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                            {scoreFormData.winner === 'DRAW' ? (
+                              <>
+                                🤝 <strong>Result:</strong> Draw
+                                <br />
+                                📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
+                              </>
+                            ) : (
+                              <>
+                                🏆 <strong>Winner:</strong> {gameSession.participants.find(p => p.user.id === scoreFormData.winner)?.user.username || 'Unknown'}
+                                <br />
+                                📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
+                              </>
+                            )}
                           </div>
                         )}
                         <div className="space-y-4">
@@ -388,14 +412,19 @@ export default function SessionPage() {
                             </label>
                             <div className="space-y-3">
                               {gameSession.participants.map((p) => (
-                                <div key={p.user.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                                <div key={p.user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-white rounded-lg border space-y-2 sm:space-y-0">
                                   <div className="flex items-center space-x-3">
-                                    <span className="text-sm font-medium">
+                                    <span className="text-sm font-medium truncate">
                                       {p.user.username || p.user.email}
                                     </span>
-                                    {scoreFormData.winner === p.user.id && (
+                                    {scoreFormData.winner === p.user.id && scoreFormData.winner !== 'DRAW' && (
                                       <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                                         Winner
+                                      </span>
+                                    )}
+                                    {scoreFormData.winner === 'DRAW' && scoreFormData.goals[p.user.id] === Math.max(...Object.values(scoreFormData.goals)) && (
+                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        Draw
                                       </span>
                                     )}
                                   </div>
@@ -445,17 +474,17 @@ export default function SessionPage() {
                             />
                           </div>
                           
-                          <div className="flex space-x-2">
+                          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                             <button
                               onClick={submitScore}
                               disabled={isSubmittingScore || !scoreFormData.winner}
-                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-2"
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center justify-center space-x-2 flex-1 sm:flex-none"
                             >
                               <span>{isSubmittingScore ? 'Submitting...' : '⚽ Submit Match Result'}</span>
                             </button>
                             <button
                               onClick={() => setShowScoreForm(false)}
-                              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
                             >
                               Cancel
                             </button>
@@ -560,14 +589,14 @@ export default function SessionPage() {
             </div>
 
             {/* QR Code and Actions */}
-            <div className="space-y-6">
-              <div className="bg-white shadow rounded-lg p-6">
+            <div className="space-y-4 lg:space-y-6 order-1 lg:order-2">
+              <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Share Session</h3>
                 <div className="text-center">
                   <img
                     src={generateQRCodeUrl(gameSession.code)}
                     alt="Session QR Code"
-                    className="mx-auto border rounded-lg mb-2"
+                    className="mx-auto border rounded-lg mb-2 w-32 h-32 sm:w-auto sm:h-auto"
                   />
                   <p className="text-xs text-gray-500">
                     Scan to join session
@@ -577,14 +606,14 @@ export default function SessionPage() {
                       type="text"
                       value={`${window.location.origin}/session/${gameSession.code}`}
                       readOnly
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-md bg-gray-50"
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-md bg-gray-50 break-all"
                     />
                   </div>
                 </div>
               </div>
 
               {isCreator && (
-                <div className="bg-white shadow rounded-lg p-6">
+                <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Session Controls</h3>
                   <div className="space-y-2">
                     <button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium">

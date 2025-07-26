@@ -14,88 +14,85 @@ export async function GET() {
       )
     }
 
-    // Mock data for now to test the frontend
-    const mockSessions = [
-      {
-        id: "mock-session-1",
-        code: "ABC123",
-        game: {
-          id: "game-1",
-          name: "Chess"
-        },
-        createdBy: {
-          id: session.user.id,
-          username: session.user.username || "You",
-          email: session.user.email || ""
-        },
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-        joinedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        participantCount: 2,
-        result: {
-          id: "result-1",
-          status: "APPROVED",
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          enteredById: session.user.id,
-          approvedById: "other-user"
-        },
-        isActive: false,
-        status: "APPROVED",
-        timeElapsed: 48,
-        isCreator: true
+    // Fetch actual sessions from database where user is a participant
+    const userSessions = await prisma.gameSession.findMany({
+      where: {
+        participants: {
+          some: {
+            userId: session.user.id
+          }
+        }
       },
-      {
-        id: "mock-session-2",
-        code: "XYZ789",
-        game: {
-          id: "game-2",
-          name: "Poker"
-        },
+      include: {
+        game: true,
         createdBy: {
-          id: "other-user",
-          username: "Alice",
-          email: "alice@example.com"
+          select: {
+            id: true,
+            username: true,
+            email: true
+          }
         },
-        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        joinedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        participantCount: 3,
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true
+              }
+            }
+          }
+        },
         result: {
-          id: "result-2",
-          status: "PENDING",
-          createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-          enteredById: "other-user",
-          approvedById: null
-        },
-        isActive: true,
-        status: "PENDING",
-        timeElapsed: 24,
-        isCreator: false
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            enteredById: true,
+            approvedById: true
+          }
+        }
       },
-      {
-        id: "mock-session-3",
-        code: "DEF456",
-        game: {
-          id: "game-3",
-          name: "Scrabble"
-        },
-        createdBy: {
-          id: session.user.id,
-          username: session.user.username || "You",
-          email: session.user.email || ""
-        },
-        createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
-        joinedAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-        participantCount: 4,
-        result: null,
-        isActive: true,
-        status: "ACTIVE",
-        timeElapsed: 12,
-        isCreator: true
+      orderBy: {
+        createdAt: 'desc'
       }
-    ]
+    })
+
+    // Transform the data to match the frontend expectations
+    const sessions = userSessions.map(gameSession => {
+      const isCreator = gameSession.creatorId === session.user.id
+      const participantCount = gameSession.participants.length
+      
+      // Calculate time elapsed in hours
+      const timeElapsed = (Date.now() - new Date(gameSession.createdAt).getTime()) / (1000 * 60 * 60)
+      
+      // Determine session status
+      let status = 'ACTIVE'
+      if (gameSession.result) {
+        status = gameSession.result.status
+      } else if (!gameSession.isActive) {
+        status = 'ENDED'
+      }
+
+      return {
+        id: gameSession.id,
+        code: gameSession.code,
+        game: gameSession.game,
+        createdBy: gameSession.createdBy,
+        createdAt: gameSession.createdAt.toISOString(),
+        joinedAt: gameSession.participants.find(p => p.userId === session.user.id)?.joinedAt.toISOString() || gameSession.createdAt.toISOString(),
+        participantCount,
+        result: gameSession.result,
+        isActive: gameSession.isActive,
+        status,
+        timeElapsed,
+        isCreator
+      }
+    })
 
     return NextResponse.json({
-      sessions: mockSessions,
-      totalCount: mockSessions.length
+      sessions,
+      totalCount: sessions.length
     })
   } catch (error) {
     console.error("Error fetching user history:", error)

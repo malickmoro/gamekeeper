@@ -111,15 +111,15 @@ export default function SettingsPage() {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="text-indigo-600 hover:text-indigo-500">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm sm:text-base">
                 ← Back to Home
               </Link>
-              <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Settings</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">
+            <div className="flex items-center">
+              <span className="text-gray-700 text-sm sm:text-base truncate">
                 {session.user.username || session.user.email}
               </span>
             </div>
@@ -127,8 +127,8 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-4xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-4 sm:py-6">
           {/* Messages */}
           {error && (
             <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -142,11 +142,11 @@ export default function SettingsPage() {
           )}
 
           {/* Profile Information */}
-          <div className="bg-white shadow rounded-lg mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
+          <div className="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">Profile Information</h2>
             </div>
-            <div className="px-6 py-4">
+            <div className="px-4 sm:px-6 py-4">
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Email</label>
@@ -182,11 +182,11 @@ export default function SettingsPage() {
 
           {/* Privacy Settings */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">Privacy Settings</h2>
             </div>
-            <div className="px-6 py-4">
-              <div className="flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                 <div className="flex-1">
                   <h3 className="text-base font-medium text-gray-900">Private Profile</h3>
                   <p className="text-sm text-gray-500 mt-1">
@@ -194,7 +194,7 @@ export default function SettingsPage() {
                     Only you and session participants will be able to see your activity.
                   </p>
                 </div>
-                <div className="ml-6">
+                <div className="sm:ml-6 flex justify-center sm:justify-end">
                   <button
                     type="button"
                     onClick={handlePrivacyToggle}

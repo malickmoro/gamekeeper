@@ -1,6 +1,22 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
+// Simple code generator for seeding (without Prisma dependency)
+function generateSessionCode(): string {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const numbers = '0123456789'
+  
+  const firstLetter = letters[Math.floor(Math.random() * letters.length)]
+  const secondLetter = letters[Math.floor(Math.random() * letters.length)]
+  
+  let numbersPart = ''
+  for (let i = 0; i < 6; i++) {
+    numbersPart += numbers[Math.floor(Math.random() * numbers.length)]
+  }
+  
+  return `${firstLetter}${secondLetter}${numbersPart}`
+}
+
 const prisma = new PrismaClient()
 
 async function main() {
@@ -44,6 +60,7 @@ async function main() {
   // Create a sample session
   const gameSession = await prisma.gameSession.create({
     data: {
+      code: generateSessionCode(),
       gameId: fifaGame.id,
       creatorId: user1.id,
     },

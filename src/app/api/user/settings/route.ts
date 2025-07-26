@@ -15,19 +15,20 @@ export async function GET() {
       )
     }
 
-    // Mock data for now to test the frontend
-    const mockUser = {
-      id: session.user.id,
-      email: session.user.email || "user@example.com",
-      username: session.user.username || "user",
-      isPrivate: false, // Default value
-      hasCompletedOnboarding: true,
-      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-      updatedAt: new Date().toISOString()
+    // Fetch actual user data from database
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    })
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json({
-      user: mockUser
+      user
     })
   } catch (error) {
     console.error("Error fetching user settings:", error)
@@ -61,22 +62,11 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // For now, return mock data to test the frontend
-    // In production, this would update the database:
-    // await prisma.user.update({
-    //   where: { id: session.user.id },
-    //   data: { isPrivate }
-    // })
-
-    const updatedUser = {
-      id: session.user.id,
-      email: session.user.email || "user@example.com",
-      username: session.user.username || "user",
-      isPrivate: isPrivate, // Use the value from the request
-      hasCompletedOnboarding: true,
-      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+    // Update the user in the database
+    const updatedUser = await prisma.user.update({
+      where: { id: session.user.id },
+      data: { isPrivate }
+    })
 
     return NextResponse.json({
       message: "Settings updated successfully",
