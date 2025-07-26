@@ -36,12 +36,19 @@ export default function Onboard() {
       const data = await response.json()
 
       if (response.ok) {
-        // Update the session with new username
-        await update({
-          username: data.user.username,
-          hasCompletedOnboarding: true,
-        })
-        router.push('/')
+        // Success! Username saved to database
+        // Force a complete page reload to ensure fresh session data
+        
+        // Show success message briefly
+        setError('')
+        setIsLoading(false)
+        
+        // Brief delay to show success, then redirect
+        setTimeout(() => {
+          window.location.replace('/')
+        }, 1000)
+        
+        return // Exit early to prevent further execution
       } else {
         setError(data.error || 'An error occurred during onboarding')
       }

@@ -63,7 +63,8 @@ export default function SessionPage() {
   const [showScoreForm, setShowScoreForm] = useState(false)
   const [scoreFormData, setScoreFormData] = useState({
     winner: '',
-    scores: {} as Record<string, number>,
+    goals: {} as Record<string, number>,
+    matchDuration: '90 minutes',
     notes: ''
   })
 
@@ -92,11 +93,11 @@ export default function SessionPage() {
         
         // Initialize score form with participants
         if (data.session.participants) {
-          const initialScores: any = {}
+          const initialGoals: any = {}
           data.session.participants.forEach((p: Participant) => {
-            initialScores[p.user.id] = 0
+            initialGoals[p.user.id] = 0
           })
-          setScoreFormData(prev => ({ ...prev, scores: initialScores }))
+          setScoreFormData(prev => ({ ...prev, goals: initialGoals }))
         }
       } else if (response.status === 404) {
         setError('Session not found')
@@ -193,14 +194,24 @@ export default function SessionPage() {
     }
   }
 
-  const updateScore = (userId: string, score: number) => {
-    setScoreFormData(prev => ({
-      ...prev,
-      scores: {
-        ...prev.scores,
-        [userId]: score
+  const updateGoals = (userId: string, goals: number) => {
+    setScoreFormData(prev => {
+      const newGoals = {
+        ...prev.goals,
+        [userId]: goals
       }
-    }))
+      
+      // Auto-determine winner based on goals
+      const winner = Object.keys(newGoals).reduce((a, b) => 
+        newGoals[a] > newGoals[b] ? a : b
+      )
+      
+      return {
+        ...prev,
+        goals: newGoals,
+        winner: winner
+      }
+    })
   }
 
   const getStatusBadge = (status: string) => {
@@ -354,48 +365,51 @@ export default function SessionPage() {
                     {!showScoreForm ? (
                       <button 
                         onClick={() => setShowScoreForm(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium"
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium flex items-center space-x-2"
                       >
-                        Submit Score
+                        <span>⚽ Submit FIFA Match Result</span>
                       </button>
                     ) : (
-                      <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
-                        <h4 className="text-lg font-medium mb-4">Submit Score</h4>
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                        <h4 className="text-lg font-medium mb-2 flex items-center">
+                          ⚽ FIFA Match Result
+                        </h4>
+                        {scoreFormData.winner && (
+                          <div className="mb-4 p-2 bg-green-100 rounded text-sm">
+                            🏆 <strong>Winner:</strong> {gameSession.participants.find(p => p.user.id === scoreFormData.winner)?.user.username || 'Unknown'}
+                            <br />
+                            📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
+                          </div>
+                        )}
                         <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Winner
+                              ⚽ Goals Scored
                             </label>
-                            <select
-                              value={scoreFormData.winner}
-                              onChange={(e) => setScoreFormData(prev => ({ ...prev, winner: e.target.value }))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                              <option value="">Select winner</option>
+                            <div className="space-y-3">
                               {gameSession.participants.map((p) => (
-                                <option key={p.user.id} value={p.user.id}>
-                                  {p.user.username || p.user.email}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Scores
-                            </label>
-                            <div className="space-y-2">
-                              {gameSession.participants.map((p) => (
-                                <div key={p.user.id} className="flex items-center space-x-3">
-                                  <span className="w-32 text-sm">
-                                    {p.user.username || p.user.email}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={scoreFormData.scores[p.user.id] || 0}
-                                    onChange={(e) => updateScore(p.user.id, parseInt(e.target.value) || 0)}
-                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                  />
+                                <div key={p.user.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                                  <div className="flex items-center space-x-3">
+                                    <span className="text-sm font-medium">
+                                      {p.user.username || p.user.email}
+                                    </span>
+                                    {scoreFormData.winner === p.user.id && (
+                                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                        Winner
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="20"
+                                      value={scoreFormData.goals[p.user.id] || 0}
+                                      onChange={(e) => updateGoals(p.user.id, parseInt(e.target.value) || 0)}
+                                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                    />
+                                    <span className="text-xs text-gray-500">goals</span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -403,14 +417,31 @@ export default function SessionPage() {
                           
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Notes (optional)
+                              ⏱️ Match Duration
+                            </label>
+                            <select
+                              value={scoreFormData.matchDuration}
+                              onChange={(e) => setScoreFormData(prev => ({ ...prev, matchDuration: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            >
+                              <option value="90 minutes">90 minutes (Full match)</option>
+                              <option value="45 minutes">45 minutes (Half match)</option>
+                              <option value="30 minutes">30 minutes (Quick match)</option>
+                              <option value="15 minutes">15 minutes (Short match)</option>
+                              <option value="6 minutes">6 minutes (Default FIFA)</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              📝 Match Notes (optional)
                             </label>
                             <textarea
                               value={scoreFormData.notes}
                               onChange={(e) => setScoreFormData(prev => ({ ...prev, notes: e.target.value }))}
                               rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Add any notes about the game..."
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              placeholder="Any highlights, cards, or memorable moments from the match..."
                             />
                           </div>
                           
@@ -418,9 +449,9 @@ export default function SessionPage() {
                             <button
                               onClick={submitScore}
                               disabled={isSubmittingScore || !scoreFormData.winner}
-                              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-2"
                             >
-                              {isSubmittingScore ? 'Submitting...' : 'Submit Score'}
+                              <span>{isSubmittingScore ? 'Submitting...' : '⚽ Submit Match Result'}</span>
                             </button>
                             <button
                               onClick={() => setShowScoreForm(false)}

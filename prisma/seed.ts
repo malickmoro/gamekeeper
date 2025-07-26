@@ -31,39 +31,25 @@ async function main() {
 
   console.log(`✅ Created users: ${user1.username}, ${user2.username}`)
 
-  // Create sample games
-  const game1 = await prisma.game.create({
+  // Create FIFA game
+  const fifaGame = await prisma.game.create({
     data: {
-      name: 'Chess',
+      name: 'FIFA',
       isActive: true,
     },
   })
 
-  const game2 = await prisma.game.create({
-    data: {
-      name: 'Poker',
-      isActive: true,
-    },
-  })
-
-  const game3 = await prisma.game.create({
-    data: {
-      name: 'Scrabble',
-      isActive: true,
-    },
-  })
-
-  console.log(`✅ Created games: ${game1.name}, ${game2.name}, ${game3.name}`)
+  console.log(`✅ Created game: ${fifaGame.name}`)
 
   // Create a sample session
   const gameSession = await prisma.gameSession.create({
     data: {
-      gameId: game1.id,
+      gameId: fifaGame.id,
       creatorId: user1.id,
     },
   })
 
-  console.log(`✅ Created session for ${game1.name}`)
+  console.log(`✅ Created session for ${fifaGame.name}`)
 
   // Add participants to the session
   const participant1 = await prisma.participant.create({
@@ -82,18 +68,19 @@ async function main() {
 
   console.log(`✅ Added participants to session`)
 
-  // Create a sample result
+  // Create a sample result (FIFA match: Alice 3 - 1 Bob)
   const result = await prisma.result.create({
     data: {
       gameSessionId: gameSession.id,
       enteredById: user1.id,
       scoreData: {
         winner: user1.id,
-        scores: {
-          [user1.id]: 1,
-          [user2.id]: 0,
+        goals: {
+          [user1.id]: 3,  // Alice scored 3 goals
+          [user2.id]: 1,  // Bob scored 1 goal
         },
-        moves: 42,
+        matchDuration: "90 minutes",
+        finalScore: "3-1"
       },
       status: 'PENDING',
     },
