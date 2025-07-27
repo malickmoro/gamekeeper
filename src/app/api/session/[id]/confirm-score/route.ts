@@ -94,6 +94,14 @@ export async function POST(
       }
     })
 
+    // If approved, automatically end the session
+    if (action === "approve") {
+      await prisma.gameSession.update({
+        where: { id: gameSession.id },
+        data: { isActive: false }
+      })
+    }
+
     return NextResponse.json({
       message: `Score ${action === "approve" ? "approved" : "rejected"} successfully`,
       result: {

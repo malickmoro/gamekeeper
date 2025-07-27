@@ -195,7 +195,18 @@ export default function SessionPage() {
 
       if (response.ok) {
         setSuccessMessage(`Score ${action === 'approve' ? 'approved' : 'rejected'} successfully!`)
-        fetchSession() // Refresh session data
+        
+        // If approved, end the session and redirect to home
+        if (action === 'approve') {
+          setTimeout(() => {
+            setSuccessMessage('Session completed! Redirecting to home...')
+            setTimeout(() => {
+              router.push('/')
+            }, 2000)
+          }, 1000)
+        } else {
+          fetchSession() // Refresh session data
+        }
       } else {
         setError(data.error || `Failed to ${action} score`)
       }
@@ -295,15 +306,16 @@ export default function SessionPage() {
 
   const getStatusBadge = (status: string) => {
     const statusClasses = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      APPROVED: 'bg-green-100 text-green-800',
-      REJECTED: 'bg-red-100 text-red-800',
-      VOID: 'bg-gray-100 text-gray-800',
-      ACTIVE: 'bg-blue-100 text-blue-800'
+      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      APPROVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      VOID: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+      ACTIVE: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      ENDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
     }
     
     return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
         {status}
       </span>
     )
@@ -449,12 +461,12 @@ export default function SessionPage() {
                         <span>⚽ Submit FIFA Match Result</span>
                       </button>
                     ) : (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md">
                         <h4 className="text-lg font-medium mb-2 flex items-center">
                           ⚽ FIFA Match Result
                         </h4>
                         {scoreFormData.winner && (
-                          <div className={`mb-4 p-2 rounded text-sm ${scoreFormData.winner === 'DRAW' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                          <div className={`mb-4 p-2 rounded text-sm ${scoreFormData.winner === 'DRAW' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
                             {scoreFormData.winner === 'DRAW' ? (
                               <>
                                 🤝 <strong>Result:</strong> Draw
@@ -477,7 +489,7 @@ export default function SessionPage() {
                             </label>
                             <div className="space-y-3">
                               {gameSession.participants.map((p) => (
-                                <div key={p.user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-white rounded-lg border space-y-2 sm:space-y-0">
+                                <div key={p.user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-600 space-y-2 sm:space-y-0">
                                   <div className="flex items-center space-x-3">
                                     <span className="text-sm font-medium truncate">
                                       {p.user.username || p.user.email}
@@ -562,9 +574,9 @@ export default function SessionPage() {
 
                 {/* Score Confirmation */}
                 {canConfirmScore && (
-                  <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
                     <h4 className="text-lg font-medium mb-2">Score Pending Approval</h4>
-                    <p className="text-sm text-gray-600 mb-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
                       A score has been submitted for this session. Please review and approve or reject it.
                     </p>
                     <div className="flex space-x-2">
@@ -588,12 +600,12 @@ export default function SessionPage() {
 
                 {/* Result Display */}
                 {hasResult && gameSession.result && (
-                  <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+                  <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md">
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="text-lg font-medium">Game Result</h4>
                       {getStatusBadge(gameSession.result.status)}
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
                       <p>Submitted on: {new Date(gameSession.result.createdAt).toLocaleString()}</p>
                       {gameSession.result.approvedById && (
                         <p>Last updated: {new Date(gameSession.result.updatedAt).toLocaleString()}</p>
@@ -602,9 +614,57 @@ export default function SessionPage() {
                     {gameSession.result.scoreData && (
                       <div className="mt-3">
                         <h5 className="font-medium mb-2">Score Details:</h5>
-                        <pre className="text-xs bg-white p-2 rounded border overflow-auto">
-                          {JSON.stringify(gameSession.result.scoreData, null, 2)}
-                        </pre>
+                        <div className="bg-white dark:bg-gray-700 p-3 rounded border dark:border-gray-600">
+                          {(() => {
+                            const scoreData = gameSession.result.scoreData as any
+                            return (
+                              <div className="space-y-2">
+                                {scoreData.winner === 'DRAW' ? (
+                                  <div className="text-center p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
+                                    <div className="text-lg font-semibold text-blue-800 dark:text-blue-200">🤝 Draw</div>
+                                    <div className="text-sm text-blue-600 dark:text-blue-300">
+                                      Final Score: {Object.values(scoreData.goals || {}).join(' - ')}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-center p-2 bg-green-100 dark:bg-green-900/30 rounded">
+                                    <div className="text-lg font-semibold text-green-800 dark:text-green-200">
+                                      🏆 Winner: {gameSession.participants.find(p => p.user.id === scoreData.winner)?.user.username || 'Unknown'}
+                                    </div>
+                                    <div className="text-sm text-green-600 dark:text-green-300">
+                                      Final Score: {Object.values(scoreData.goals || {}).join(' - ')}
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                                  {Object.entries(scoreData.goals || {}).map(([userId, goals]) => {
+                                    const participant = gameSession.participants.find(p => p.user.id === userId)
+                                    return (
+                                      <div key={userId} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-600 rounded">
+                                        <span className="text-sm font-medium">
+                                          {participant?.user.username || 'Unknown'}
+                                        </span>
+                                        <span className="text-sm font-bold">
+                                          {goals as number} goals
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                {scoreData.matchDuration && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    ⏱️ Match Duration: {scoreData.matchDuration}
+                                  </div>
+                                )}
+                                {scoreData.notes && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    📝 Notes: {scoreData.notes}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </div>
                       </div>
                     )}
                   </div>

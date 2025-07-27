@@ -27,6 +27,7 @@ interface SessionHistoryItem {
     createdAt: string
     enteredById: string
     approvedById?: string | null
+    scoreData?: any
   } | null
   isActive: boolean
   status: string
@@ -80,17 +81,53 @@ export default function HistoryPage() {
 
   const getStatusBadge = (status: string) => {
     const statusClasses = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      APPROVED: 'bg-green-100 text-green-800',
-      REJECTED: 'bg-red-100 text-red-800',
-      VOID: 'bg-gray-100 text-gray-800',
-      ACTIVE: 'bg-blue-100 text-blue-800',
-      INACTIVE: 'bg-gray-100 text-gray-600'
+      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      APPROVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      VOID: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+      ACTIVE: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      INACTIVE: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+      ENDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
     }
     
     return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
         {status}
+      </span>
+    )
+  }
+
+  const getResultBadge = (sessionItem: SessionHistoryItem) => {
+    if (!sessionItem.result || sessionItem.result.status !== 'APPROVED') {
+      return null
+    }
+
+    const scoreData = sessionItem.result.scoreData
+    if (!scoreData) {
+      return (
+        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          Completed
+        </span>
+      )
+    }
+
+    if (scoreData.winner === 'DRAW') {
+      return (
+        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          🤝 Draw
+        </span>
+      )
+    }
+
+    // Check if current user is the winner
+    const isWinner = scoreData.winner === session?.user?.id
+    return (
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+        isWinner 
+          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
+          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+      }`}>
+        {isWinner ? '🏆 Win' : '❌ Loss'}
       </span>
     )
   }
@@ -118,24 +155,24 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-2 sm:space-x-4">
               <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm sm:text-base">
                 ← Back to Home
               </Link>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Session History</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">Session History</h1>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-              <span className="text-gray-700 text-sm sm:text-base truncate">
+              <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base truncate">
                 {session.user.username || session.user.email}
               </span>
               <Link
                 href="/settings"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium text-center"
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium text-center"
               >
                 Settings
               </Link>
@@ -153,9 +190,9 @@ export default function HistoryPage() {
           )}
 
           {sessions.length === 0 && !isLoading && !error ? (
-            <div className="bg-white shadow rounded-lg p-6 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Sessions Yet</h3>
-              <p className="text-gray-600 mb-4">You haven&apos;t participated in any game sessions yet.</p>
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 text-center">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Sessions Yet</h3>
+              <p className="text-gray-600 dark:text-gray-300 mb-4">You haven&apos;t participated in any game sessions yet.</p>
               <Link
                 href="/"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium"
@@ -164,16 +201,16 @@ export default function HistoryPage() {
               </Link>
             </div>
           ) : (
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white">
                   Your Game Sessions ({sessions.length})
                 </h2>
               </div>
               
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Game
@@ -194,57 +231,63 @@ export default function HistoryPage() {
                         Status
                       </th>
                       <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Result
+                      </th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {sessions.map((sessionItem) => (
-                      <tr key={sessionItem.id} className="hover:bg-gray-50">
+                      <tr key={sessionItem.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-medium mr-2 sm:mr-3">
                               {sessionItem.game.name.charAt(0)}
                             </div>
                             <div>
-                              <div className="text-xs sm:text-sm font-medium text-gray-900">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                                 {sessionItem.game.name}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900 font-mono">
+                          <div className="text-xs sm:text-sm text-gray-900 dark:text-white font-mono">
                             {sessionItem.code}
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900">
+                          <div className="text-xs sm:text-sm text-gray-900 dark:text-white">
                             {formatDate(sessionItem.createdAt)}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
                             {formatTimeElapsed(sessionItem.timeElapsed)} ago
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-1 sm:px-2 py-1 text-xs font-semibold rounded-full ${
                             sessionItem.isCreator 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                           }`}>
                             {sessionItem.isCreator ? 'Creator' : 'Participant'}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 dark:text-white">
                           {sessionItem.participantCount} players
                         </td>
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                           {getStatusBadge(sessionItem.status)}
                         </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          {getResultBadge(sessionItem)}
+                        </td>
                         <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
                           <Link
                             href={`/session/${sessionItem.id}`}
-                            className="text-indigo-600 hover:text-indigo-900"
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                           >
                             View Details
                           </Link>

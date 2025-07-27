@@ -49,7 +49,8 @@ export async function GET() {
             status: true,
             createdAt: true,
             enteredById: true,
-            approvedById: true
+            approvedById: true,
+            scoreData: true
           }
         }
       },
