@@ -144,19 +144,21 @@ export async function GET(
     const totalGames = sessions.length
     const wins = sessions.filter(s => s.outcome === "WIN").length
     const losses = sessions.filter(s => s.outcome === "LOSS").length
+    const draws = sessions.filter(s => s.outcome === "DRAW").length
     const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : "0.0"
 
     // Games breakdown
     const gameStats = sessions.reduce((acc, session) => {
       const gameName = session.game.name
       if (!acc[gameName]) {
-        acc[gameName] = { total: 0, wins: 0, losses: 0 }
+        acc[gameName] = { total: 0, wins: 0, losses: 0, draws: 0 }
       }
       acc[gameName].total++
       if (session.outcome === "WIN") acc[gameName].wins++
       if (session.outcome === "LOSS") acc[gameName].losses++
+      if (session.outcome === "DRAW") acc[gameName].draws++
       return acc
-    }, {} as Record<string, { total: number; wins: number; losses: number }>)
+    }, {} as Record<string, { total: number; wins: number; losses: number; draws: number }>)
 
     return NextResponse.json({
       user: {
@@ -170,6 +172,7 @@ export async function GET(
         totalGames,
         wins,
         losses,
+        draws,
         winRate: parseFloat(winRate),
         gameStats
       },

@@ -4,48 +4,49 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { formatTimeElapsed } from '@/lib/time-utils'
 
-interface SessionHistoryItem {
+interface GameSession {
   id: string
   code: string
   game: {
-    id: string
     name: string
   }
-  createdBy: {
-    id: string
-    username: string
-    email: string
-  }
+  isActive: boolean
   createdAt: string
-  joinedAt: string
-  participantCount: number
+  participants: {
+    user: {
+      username: string
+      email: string
+    }
+  }[]
   result?: {
     id: string
     status: string
     createdAt: string
-    enteredById: string
-    approvedById?: string | null
-    scoreData?: any
-  } | null
-  isActive: boolean
-  status: string
-  timeElapsed: number
-  isCreator: boolean
+  }
 }
 
-interface SessionHistoryResponse {
-  sessions: SessionHistoryItem[]
-  totalCount: number
+interface Participation {
+  sessionId: string
+  sessionCode: string
+  gameName: string
+  isActive: boolean
+  createdAt: string
+  result?: {
+    id: string
+    status: string
+    createdAt: string
+  }
 }
 
 export default function HistoryPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [sessions, setSessions] = useState<SessionHistoryItem[]>([])
+  const [gameSessions, setGameSessions] = useState<GameSession[]>([])
+  const [participations, setParticipations] = useState<Participation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState<'created' | 'participated'>('created')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -58,78 +59,30 @@ export default function HistoryPage() {
       return
     }
 
-    fetchHistory()
+    if (session) {
+      fetchHistory()
+    }
   }, [session, status, router])
 
   const fetchHistory = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch('/api/user/history')
+      setError('')
       
+      const response = await fetch('/api/user/history')
+      const data = await response.json()
+
       if (response.ok) {
-        const data = await response.json()
-        setSessions(data.sessions)
+        setGameSessions(data.createdSessions || [])
+        setParticipations(data.participations || [])
       } else {
-        setError('Failed to load session history')
+        setError(data.error || 'Failed to load history')
       }
-    } catch {
-      setError('An error occurred while loading session history')
+    } catch (error) {
+      setError('An error occurred while loading history')
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const getStatusBadge = (status: string) => {
-    const statusClasses = {
-      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      APPROVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      VOID: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-      ACTIVE: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      INACTIVE: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-      ENDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-    }
-    
-    return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
-        {status}
-      </span>
-    )
-  }
-
-  const getResultBadge = (sessionItem: SessionHistoryItem) => {
-    if (!sessionItem.result || sessionItem.result.status !== 'APPROVED') {
-      return null
-    }
-
-    const scoreData = sessionItem.result.scoreData
-    if (!scoreData) {
-      return (
-        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-          Completed
-        </span>
-      )
-    }
-
-    if (scoreData.winner === 'DRAW') {
-      return (
-        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-          🤝 Draw
-        </span>
-      )
-    }
-
-    // Check if current user is the winner
-    const isWinner = scoreData.winner === session?.user?.id
-    return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-        isWinner 
-          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
-          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-      }`}>
-        {isWinner ? '🏆 Win' : '❌ Loss'}
-      </span>
-    )
   }
 
   const formatDate = (dateString: string) => {
@@ -142,10 +95,44 @@ export default function HistoryPage() {
     })
   }
 
-  if (status === 'loading' || isLoading) {
+  const getStatusBadge = (isActive: boolean, result?: { status: string }) => {
+    if (isActive) {
+      return (
+        <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border bg-green-500/20 text-green-300 border-green-500/30">
+          <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+          Active
+        </span>
+      )
+    }
+    
+    if (result) {
+      const statusClasses = {
+        COMPLETED: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+        CANCELLED: 'bg-red-500/20 text-red-300 border-red-500/30',
+        ABANDONED: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+      }
+      
+      return (
+        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${statusClasses[result.status as keyof typeof statusClasses] || 'bg-gray-500/20 text-gray-300 border-gray-500/30'}`}>
+          {result.status}
+        </span>
+      )
+    }
+    
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full border bg-gray-500/20 text-gray-300 border-gray-500/30">
+        Unknown
+      </span>
+    )
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
+          <p className="text-purple-200 text-lg">Loading history...</p>
+        </div>
       </div>
     )
   }
@@ -155,151 +142,248 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
+      <header className="bg-black/20 backdrop-blur-lg border-b border-purple-500/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm sm:text-base">
-                ← Back to Home
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="text-purple-300 hover:text-purple-100 transition-colors duration-200">
+                <div className="flex items-center space-x-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span>Back to Home</span>
+                </div>
               </Link>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">Session History</h1>
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  Gaming History
+                </h1>
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-              <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base truncate">
-                {session.user.username || session.user.email}
-              </span>
-              <Link
-                href="/settings"
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium text-center"
-              >
-                Settings
-              </Link>
+            
+            <div className="flex items-center space-x-2 text-purple-200">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">{session.user.username || session.user.email}</span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
-        <div className="py-4 sm:py-6">
-          {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/20 border border-red-500/30 text-red-300 rounded-xl">
+            <div className="flex items-center space-x-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
-          )}
+          </div>
+        )}
 
-          {sessions.length === 0 && !isLoading && !error ? (
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 text-center">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Sessions Yet</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">You haven&apos;t participated in any game sessions yet.</p>
-              <Link
-                href="/"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium"
-              >
-                Create Your First Session
-              </Link>
+        {/* Tab Navigation */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-black/30 backdrop-blur-lg border border-purple-500/20 rounded-xl p-1">
+            <button
+              onClick={() => setActiveTab('created')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                activeTab === 'created'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                  : 'text-purple-300 hover:text-white hover:bg-purple-500/20'
+              }`}
+            >
+              Sessions Created ({gameSessions.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('participated')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                activeTab === 'participated'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                  : 'text-purple-300 hover:text-white hover:bg-purple-500/20'
+              }`}
+            >
+              Sessions Joined ({participations.length})
+            </button>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center min-h-96">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
+              <p className="text-purple-200 text-lg">Loading gaming history...</p>
             </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Your Game Sessions ({sessions.length})
-                </h2>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Game
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Session ID
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Role
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Players
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Result
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {sessions.map((sessionItem) => (
-                      <tr key={sessionItem.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-medium mr-2 sm:mr-3">
-                              {sessionItem.game.name.charAt(0)}
+          </div>
+        ) : (
+          <div>
+            {/* Created Sessions Tab */}
+            {activeTab === 'created' && (
+              <div className="bg-black/30 backdrop-blur-lg border border-purple-500/20 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-purple-500/20">
+                  <h2 className="text-xl font-bold text-white">
+                    Sessions You Created
+                  </h2>
+                </div>
+                
+                {gameSessions.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="text-gray-400 mb-6">
+                      <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">No Sessions Created Yet</h3>
+                    <p className="text-gray-300 mb-6">
+                      Start by creating your first gaming session and invite friends to join!
+                    </p>
+                    <Link
+                      href="/"
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105"
+                    >
+                      Create Session
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-purple-500/20">
+                    {gameSessions.map((session) => (
+                      <div key={session.id} className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
                             </div>
                             <div>
-                              <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
-                                {sessionItem.game.name}
+                              <div className="text-lg font-semibold text-white">
+                                {session.game.name}
+                              </div>
+                              <div className="text-gray-300 text-sm">
+                                Code: <span className="font-mono text-purple-400">{session.code}</span>
+                              </div>
+                              <div className="flex items-center space-x-3 mt-2">
+                                {getStatusBadge(session.isActive, session.result)}
+                                <span className="text-xs text-gray-400">
+                                  {formatDate(session.createdAt)}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {session.participants.length} participants
+                                </span>
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900 dark:text-white font-mono">
-                            {sessionItem.code}
+                          
+                          <div className="flex space-x-3">
+                            {session.isActive && (
+                              <Link
+                                href={`/session/${session.code}`}
+                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105"
+                              >
+                                Join Session
+                              </Link>
+                            )}
+                            <Link
+                              href={`/session/${session.code}`}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105"
+                            >
+                              View Details
+                            </Link>
                           </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900 dark:text-white">
-                            {formatDate(sessionItem.createdAt)}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatTimeElapsed(sessionItem.timeElapsed)} ago
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-1 sm:px-2 py-1 text-xs font-semibold rounded-full ${
-                            sessionItem.isCreator 
-                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                          }`}>
-                            {sessionItem.isCreator ? 'Creator' : 'Participant'}
-                          </span>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 dark:text-white">
-                          {sessionItem.participantCount} players
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(sessionItem.status)}
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          {getResultBadge(sessionItem)}
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
-                          <Link
-                            href={`/session/${sessionItem.id}`}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                          >
-                            View Details
-                          </Link>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Participated Sessions Tab */}
+            {activeTab === 'participated' && (
+              <div className="bg-black/30 backdrop-blur-lg border border-purple-500/20 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-purple-500/20">
+                  <h2 className="text-xl font-bold text-white">
+                    Sessions You Joined
+                  </h2>
+                </div>
+                
+                {participations.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="text-gray-400 mb-6">
+                      <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3">No Sessions Joined Yet</h3>
+                    <p className="text-gray-300 mb-6">
+                      Join your first gaming session by entering a session code or scanning a QR code!
+                    </p>
+                    <Link
+                      href="/"
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105"
+                    >
+                      Join Session
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-purple-500/20">
+                    {participations.map((participation) => (
+                      <div key={participation.sessionId} className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </div>
+                            <div>
+                              <div className="text-lg font-semibold text-white">
+                                {participation.gameName}
+                              </div>
+                              <div className="text-gray-300 text-sm">
+                                Code: <span className="font-mono text-green-400">{participation.sessionCode}</span>
+                              </div>
+                              <div className="flex items-center space-x-3 mt-2">
+                                {getStatusBadge(participation.isActive, participation.result)}
+                                <span className="text-xs text-gray-400">
+                                  {formatDate(participation.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex space-x-3">
+                            {participation.isActive && (
+                              <Link
+                                href={`/session/${participation.sessionCode}`}
+                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105"
+                              >
+                                Rejoin Session
+                              </Link>
+                            )}
+                            <Link
+                              href={`/session/${participation.sessionCode}`}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105"
+                            >
+                              View Details
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   )

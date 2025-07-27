@@ -14,24 +14,13 @@ export async function GET() {
       )
     }
 
-    // Fetch actual sessions from database where user is a participant
-    const userSessions = await prisma.gameSession.findMany({
+    // Fetch sessions created by the user
+    const createdSessions = await prisma.gameSession.findMany({
       where: {
-        participants: {
-          some: {
-            userId: session.user.id
-          }
-        }
+        creatorId: session.user.id
       },
       include: {
         game: true,
-        createdBy: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        },
         participants: {
           include: {
             user: {
@@ -47,10 +36,7 @@ export async function GET() {
           select: {
             id: true,
             status: true,
-            createdAt: true,
-            enteredById: true,
-            approvedById: true,
-            scoreData: true
+            createdAt: true
           }
         }
       },
@@ -59,41 +45,68 @@ export async function GET() {
       }
     })
 
-    // Transform the data to match the frontend expectations
-    const sessions = userSessions.map(gameSession => {
-      const isCreator = gameSession.creatorId === session.user.id
-      const participantCount = gameSession.participants.length
-      
-      // Calculate time elapsed in hours
-      const timeElapsed = (Date.now() - new Date(gameSession.createdAt).getTime()) / (1000 * 60 * 60)
-      
-      // Determine session status
-      let status = 'ACTIVE'
-      if (gameSession.result) {
-        status = gameSession.result.status
-      } else if (!gameSession.isActive) {
-        status = 'ENDED'
-      }
-
-      return {
-        id: gameSession.id,
-        code: gameSession.code,
-        game: gameSession.game,
-        createdBy: gameSession.createdBy,
-        createdAt: gameSession.createdAt.toISOString(),
-        joinedAt: gameSession.participants.find(p => p.userId === session.user.id)?.joinedAt.toISOString() || gameSession.createdAt.toISOString(),
-        participantCount,
-        result: gameSession.result,
-        isActive: gameSession.isActive,
-        status,
-        timeElapsed,
-        isCreator
+    // Fetch sessions where user is a participant (but not creator)
+    const participations = await prisma.gameSession.findMany({
+      where: {
+        participants: {
+          some: {
+            userId: session.user.id
+          }
+        },
+        creatorId: {
+          not: session.user.id
+        }
+      },
+      include: {
+        game: true,
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true
+              }
+            }
+          }
+        },
+        result: {
+          select: {
+            id: true,
+            status: true,
+            createdAt: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     })
 
+    // Transform created sessions
+    const transformedCreatedSessions = createdSessions.map(session => ({
+      id: session.id,
+      code: session.code,
+      game: session.game,
+      isActive: session.isActive,
+      createdAt: session.createdAt.toISOString(),
+      participants: session.participants,
+      result: session.result
+    }))
+
+    // Transform participations
+    const transformedParticipations = participations.map(session => ({
+      sessionId: session.id,
+      sessionCode: session.code,
+      gameName: session.game.name,
+      isActive: session.isActive,
+      createdAt: session.createdAt.toISOString(),
+      result: session.result
+    }))
+
     return NextResponse.json({
-      sessions,
-      totalCount: sessions.length
+      createdSessions: transformedCreatedSessions,
+      participations: transformedParticipations
     })
   } catch (error) {
     console.error("Error fetching user history:", error)

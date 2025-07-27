@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -99,22 +99,14 @@ export default function SessionPage() {
           data.session.participants.forEach((p: Participant) => {
             initialGoals[p.user.id] = 0
           })
-          setScoreFormData(prev => ({ ...prev, goals: initialGoals }))
+          setScoreFormData(prev => ({
+            ...prev,
+            goals: initialGoals
+          }))
         }
-
-        // Check if user is already a participant
-        const isParticipant = data.session.participants.some(
-          (p: Participant) => p.user.id === session?.user?.id
-        )
-
-        // If not a participant, automatically join the session
-        if (!isParticipant && session?.user?.id) {
-          await joinSession()
-        }
-      } else if (response.status === 404) {
-        setError('Session not found')
       } else {
-        setError('Failed to load session')
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to load session')
       }
     } catch (error) {
       setError('An error occurred while loading the session')
@@ -125,20 +117,17 @@ export default function SessionPage() {
 
   const joinSession = async () => {
     setIsJoining(true)
-    setError('')
-
     try {
       const response = await fetch(`/api/session/${sessionId}/join`, {
-        method: 'POST',
+        method: 'POST'
       })
-
-      const data = await response.json()
-
+      
       if (response.ok) {
-        setGameSession(data.session)
         setSuccessMessage('Successfully joined the session!')
+        fetchSession() // Refresh session data
       } else {
-        setError(data.error || 'Failed to join session')
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to join session')
       }
     } catch (error) {
       setError('An error occurred while joining the session')
@@ -149,27 +138,22 @@ export default function SessionPage() {
 
   const submitScore = async () => {
     setIsSubmittingScore(true)
-    setError('')
-
     try {
       const response = await fetch(`/api/session/${sessionId}/submit-score`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          scoreData: scoreFormData
-        }),
+        body: JSON.stringify(scoreFormData)
       })
-
-      const data = await response.json()
-
+      
       if (response.ok) {
-        setSuccessMessage('Score submitted successfully!')
+        setSuccessMessage('Score submitted successfully! Waiting for confirmation.')
         setShowScoreForm(false)
         fetchSession() // Refresh session data
       } else {
-        setError(data.error || 'Failed to submit score')
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to submit score')
       }
     } catch (error) {
       setError('An error occurred while submitting the score')
@@ -180,35 +164,21 @@ export default function SessionPage() {
 
   const confirmScore = async (action: 'approve' | 'reject') => {
     setIsConfirming(true)
-    setError('')
-
     try {
       const response = await fetch(`/api/session/${sessionId}/confirm-score`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action })
       })
-
-      const data = await response.json()
-
+      
       if (response.ok) {
         setSuccessMessage(`Score ${action === 'approve' ? 'approved' : 'rejected'} successfully!`)
-        
-        // If approved, end the session and redirect to home
-        if (action === 'approve') {
-          setTimeout(() => {
-            setSuccessMessage('Session completed! Redirecting to home...')
-            setTimeout(() => {
-              router.push('/')
-            }, 2000)
-          }, 1000)
-        } else {
-          fetchSession() // Refresh session data
-        }
+        fetchSession() // Refresh session data
       } else {
-        setError(data.error || `Failed to ${action} score`)
+        const errorData = await response.json()
+        setError(errorData.error || `Failed to ${action} score`)
       }
     } catch (error) {
       setError(`An error occurred while ${action}ing the score`)
@@ -218,53 +188,32 @@ export default function SessionPage() {
   }
 
   const updateGoals = (userId: string, goals: number) => {
-    setScoreFormData(prev => {
-      const newGoals = {
+    setScoreFormData(prev => ({
+      ...prev,
+      goals: {
         ...prev.goals,
-        [userId]: goals
+        [userId]: Math.max(0, goals)
       }
-      
-      // Determine winner or draw based on goals
-      const goalValues = Object.values(newGoals)
-      const maxGoals = Math.max(...goalValues)
-      const playersWithMaxGoals = Object.keys(newGoals).filter(id => newGoals[id] === maxGoals)
-      
-      // Check if it's a draw (multiple players with same max score) or if all scores are 0
-      const isDraw = playersWithMaxGoals.length > 1 || (maxGoals === 0 && goalValues.every(g => g === 0))
-      const winner = isDraw ? 'DRAW' : playersWithMaxGoals[0]
-      
-      return {
-        ...prev,
-        goals: newGoals,
-        winner: winner
-      }
-    })
+    }))
   }
 
   const endSession = async () => {
-    if (!confirm('Are you sure you want to end this session? This will prevent new participants from joining.')) {
-      return
-    }
-
     setIsEndingSession(true)
-    setError('')
-
     try {
       const response = await fetch(`/api/session/${sessionId}`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'end' }),
+        body: JSON.stringify({ isActive: false })
       })
-
-      const data = await response.json()
-
+      
       if (response.ok) {
         setSuccessMessage('Session ended successfully!')
         fetchSession() // Refresh session data
       } else {
-        setError(data.error || 'Failed to end session')
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to end session')
       }
     } catch (error) {
       setError('An error occurred while ending the session')
@@ -274,28 +223,21 @@ export default function SessionPage() {
   }
 
   const deleteSession = async () => {
-    if (!confirm('Are you sure you want to delete this session? This action cannot be undone and will permanently remove all session data.')) {
+    if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
       return
     }
-
+    
     setIsDeletingSession(true)
-    setError('')
-
     try {
       const response = await fetch(`/api/session/${sessionId}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       })
-
-      const data = await response.json()
-
+      
       if (response.ok) {
-        setSuccessMessage('Session deleted successfully!')
-        // Redirect to home page after a short delay
-        setTimeout(() => {
-          router.push('/')
-        }, 1500)
+        router.push('/')
       } else {
-        setError(data.error || 'Failed to delete session')
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to delete session')
       }
     } catch (error) {
       setError('An error occurred while deleting the session')
@@ -305,31 +247,54 @@ export default function SessionPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    const statusClasses = {
-      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      APPROVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      VOID: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-      ACTIVE: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      ENDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+    switch (status) {
+      case 'ACTIVE':
+        return (
+          <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border bg-green-500/20 text-green-300 border-green-500/30">
+            <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+            Active
+          </span>
+        )
+      case 'COMPLETED':
+        return (
+          <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full border bg-blue-500/20 text-blue-300 border-blue-500/30">
+            Completed
+          </span>
+        )
+      case 'CANCELLED':
+        return (
+          <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full border bg-red-500/20 text-red-300 border-red-500/30">
+            Cancelled
+          </span>
+        )
+      case 'ABANDONED':
+        return (
+          <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full border bg-yellow-500/20 text-yellow-300 border-yellow-500/30">
+            Abandoned
+          </span>
+        )
+      default:
+        return (
+          <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full border bg-gray-500/20 text-gray-300 border-gray-500/30">
+            {status}
+          </span>
+        )
     }
-    
-    return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
-        {status}
-      </span>
-    )
   }
 
   const generateQRCodeUrl = (sessionCode: string) => {
-    const joinUrl = `${window.location.origin}/session/${sessionCode}`
-    return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(joinUrl)}`
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(sessionCode)}`
   }
 
   if (status === 'loading' || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <div className="min-h-screen gradient-gaming">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="glass rounded-2xl p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <div className="text-xl text-purple-200">Loading session...</div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -340,17 +305,23 @@ export default function SessionPage() {
 
   if (error && !gameSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full text-center">
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+      <div className="min-h-screen gradient-gaming">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="glass rounded-2xl p-8 text-center max-w-md">
+            <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Error Loading Session</h2>
+            <p className="text-red-300 mb-6">{error}</p>
+            <Link
+              href="/"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+            >
+              Go Home
+            </Link>
           </div>
-          <Link
-            href="/"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium"
-          >
-            Go Home
-          </Link>
         </div>
       </div>
     )
@@ -358,8 +329,24 @@ export default function SessionPage() {
 
   if (!gameSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Session not found</div>
+      <div className="min-h-screen gradient-gaming">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="glass rounded-2xl p-8 text-center">
+            <div className="w-16 h-16 bg-gradient-to-r from-gray-500 to-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Session Not Found</h2>
+            <p className="text-purple-200 mb-6">The session you're looking for doesn't exist.</p>
+            <Link
+              href="/"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+            >
+              Go Home
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
@@ -371,393 +358,454 @@ export default function SessionPage() {
   const canConfirmScore = isParticipant && hasResult && gameSession.result?.status === 'PENDING' && gameSession.result?.enteredById !== session.user.id
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen gradient-gaming">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="bg-black/20 backdrop-blur-lg border-b border-purple-500/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm sm:text-base">
-                ← Back to Home
-              </Link>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">GameKeeper</h1>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-              <span className="text-gray-700 text-sm sm:text-base truncate">
-                {session.user.username || session.user.email}
-              </span>
-              <Link
-                href="/settings"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium text-center"
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <Link 
+                href="/" 
+                className="flex items-center space-x-2 text-purple-300 hover:text-purple-100 transition-colors duration-200"
               >
-                Settings
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span>Back to Home</span>
               </Link>
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  {gameSession.game.name} Session
+                </h1>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-purple-200">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium">{session.user.username || session.user.email}</span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <a
+                  href="/friends"
+                  className="p-2 text-purple-300 hover:text-purple-100 hover:bg-purple-500/20 rounded-lg transition-all duration-200"
+                  title="Friends"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </a>
+                
+                <a
+                  href="/history"
+                  className="p-2 text-purple-300 hover:text-purple-100 hover:bg-purple-500/20 rounded-lg transition-all duration-200"
+                  title="History"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </a>
+                
+                <a
+                  href="/settings"
+                  className="p-2 text-purple-300 hover:text-purple-100 hover:bg-purple-500/20 rounded-lg transition-all duration-200"
+                  title="Settings"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </a>
+                
+                <button
+                  onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                  className="p-2 text-red-300 hover:text-red-100 hover:bg-red-500/20 rounded-lg transition-all duration-200"
+                  title="Logout"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
-        <div className="py-4 sm:py-6">
-          {/* Messages */}
-          {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Messages */}
+        {error && (
+          <div className="mb-6 glass-light rounded-xl p-4">
+            <div className="flex items-center space-x-2 text-red-300">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
-          )}
-          {successMessage && (
-            <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-              {successMessage}
+          </div>
+        )}
+        
+        {successMessage && (
+          <div className="mb-6 glass-light rounded-xl p-4">
+            <div className="flex items-center space-x-2 text-green-300">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{successMessage}</span>
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-            {/* Session Info */}
-            <div className="lg:col-span-2 order-2 lg:order-1">
-              <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 space-y-2 sm:space-y-0">
-                  <div className="flex-1">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                      {gameSession.game.name} Session
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      Created by {gameSession.createdBy.username || gameSession.createdBy.email}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Session Info */}
+          <div className="lg:col-span-2">
+            <div className="glass rounded-2xl p-6 mb-6">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-6 space-y-4 sm:space-y-0">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-white mb-2">
+                    {gameSession.game.name} Session
+                  </h2>
+                  <p className="text-purple-200 mb-2">
+                    Created by {gameSession.createdBy.username || gameSession.createdBy.email}
+                  </p>
+                  <p className="text-purple-300 text-sm break-all sm:break-normal">
+                    Session Code: <span className="font-mono bg-gray-800/50 px-2 py-1 rounded text-xs sm:text-sm border border-purple-500/30">{gameSession.code}</span>
+                  </p>
+                  {gameSession.timeElapsed && (
+                    <p className="text-xs text-purple-400 mt-2">
+                      Session age: {gameSession.timeElapsed.toFixed(1)} hours
                     </p>
-                    <p className="text-sm text-gray-600 break-all sm:break-normal">
-                      Session Code: <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs sm:text-sm">{gameSession.code}</span>
-                    </p>
-                    {gameSession.timeElapsed && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Session age: {gameSession.timeElapsed.toFixed(1)} hours
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {getStatusBadge(gameSession.sessionStatus || (gameSession.isActive ? 'ACTIVE' : 'INACTIVE'))}
-                  </div>
+                  )}
                 </div>
-
-                {!isParticipant && (
-                  <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p className="text-yellow-800 mb-2">You're not a participant in this session.</p>
-                    <button
-                      onClick={joinSession}
-                      disabled={isJoining}
-                      className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
-                    >
-                      {isJoining ? 'Joining...' : 'Join Session'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Score Submission */}
-                {canSubmitScore && (
-                  <div className="mb-4">
-                    {!showScoreForm ? (
-                      <button 
-                        onClick={() => setShowScoreForm(true)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium flex items-center space-x-2"
-                      >
-                        <span>⚽ Submit FIFA Match Result</span>
-                      </button>
-                    ) : (
-                      <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md">
-                        <h4 className="text-lg font-medium mb-2 flex items-center">
-                          ⚽ FIFA Match Result
-                        </h4>
-                        {scoreFormData.winner && (
-                          <div className={`mb-4 p-2 rounded text-sm ${scoreFormData.winner === 'DRAW' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                            {scoreFormData.winner === 'DRAW' ? (
-                              <>
-                                🤝 <strong>Result:</strong> Draw
-                                <br />
-                                📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
-                              </>
-                            ) : (
-                              <>
-                                🏆 <strong>Winner:</strong> {gameSession.participants.find(p => p.user.id === scoreFormData.winner)?.user.username || 'Unknown'}
-                                <br />
-                                📊 <strong>Final Score:</strong> {Object.values(scoreFormData.goals).join(' - ')}
-                              </>
-                            )}
-                          </div>
-                        )}
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              ⚽ Goals Scored
-                            </label>
-                            <div className="space-y-3">
-                              {gameSession.participants.map((p) => (
-                                <div key={p.user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-600 space-y-2 sm:space-y-0">
-                                  <div className="flex items-center space-x-3">
-                                    <span className="text-sm font-medium truncate">
-                                      {p.user.username || p.user.email}
-                                    </span>
-                                    {scoreFormData.winner === p.user.id && scoreFormData.winner !== 'DRAW' && (
-                                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                                        Winner
-                                      </span>
-                                    )}
-                                    {scoreFormData.winner === 'DRAW' && scoreFormData.goals[p.user.id] === Math.max(...Object.values(scoreFormData.goals)) && (
-                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                        Draw
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="20"
-                                      value={scoreFormData.goals[p.user.id] || 0}
-                                      onChange={(e) => updateGoals(p.user.id, parseInt(e.target.value) || 0)}
-                                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                                    />
-                                    <span className="text-xs text-gray-500">goals</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              ⏱️ Match Duration
-                            </label>
-                            <select
-                              value={scoreFormData.matchDuration}
-                              onChange={(e) => setScoreFormData(prev => ({ ...prev, matchDuration: e.target.value }))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            >
-                              <option value="90 minutes">90 minutes (Full match)</option>
-                              <option value="45 minutes">45 minutes (Half match)</option>
-                              <option value="30 minutes">30 minutes (Quick match)</option>
-                              <option value="15 minutes">15 minutes (Short match)</option>
-                              <option value="6 minutes">6 minutes (Default FIFA)</option>
-                            </select>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              📝 Match Notes (optional)
-                            </label>
-                            <textarea
-                              value={scoreFormData.notes}
-                              onChange={(e) => setScoreFormData(prev => ({ ...prev, notes: e.target.value }))}
-                              rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                              placeholder="Any highlights, cards, or memorable moments from the match..."
-                            />
-                          </div>
-                          
-                          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                            <button
-                              onClick={submitScore}
-                              disabled={isSubmittingScore || !scoreFormData.winner}
-                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center justify-center space-x-2 flex-1 sm:flex-none"
-                            >
-                              <span>{isSubmittingScore ? 'Submitting...' : '⚽ Submit Match Result'}</span>
-                            </button>
-                            <button
-                              onClick={() => setShowScoreForm(false)}
-                              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Score Confirmation */}
-                {canConfirmScore && (
-                  <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
-                    <h4 className="text-lg font-medium mb-2">Score Pending Approval</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-                      A score has been submitted for this session. Please review and approve or reject it.
-                    </p>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => confirmScore('approve')}
-                        disabled={isConfirming}
-                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
-                      >
-                        {isConfirming ? 'Processing...' : 'Approve'}
-                      </button>
-                      <button
-                        onClick={() => confirmScore('reject')}
-                        disabled={isConfirming}
-                        className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
-                      >
-                        {isConfirming ? 'Processing...' : 'Reject'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Result Display */}
-                {hasResult && gameSession.result && (
-                  <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-lg font-medium">Game Result</h4>
-                      {getStatusBadge(gameSession.result.status)}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">
-                      <p>Submitted on: {new Date(gameSession.result.createdAt).toLocaleString()}</p>
-                      {gameSession.result.approvedById && (
-                        <p>Last updated: {new Date(gameSession.result.updatedAt).toLocaleString()}</p>
-                      )}
-                    </div>
-                    {gameSession.result.scoreData && (
-                      <div className="mt-3">
-                        <h5 className="font-medium mb-2">Score Details:</h5>
-                        <div className="bg-white dark:bg-gray-700 p-3 rounded border dark:border-gray-600">
-                          {(() => {
-                            const scoreData = gameSession.result.scoreData as any
-                            return (
-                              <div className="space-y-2">
-                                {scoreData.winner === 'DRAW' ? (
-                                  <div className="text-center p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
-                                    <div className="text-lg font-semibold text-blue-800 dark:text-blue-200">🤝 Draw</div>
-                                    <div className="text-sm text-blue-600 dark:text-blue-300">
-                                      Final Score: {Object.values(scoreData.goals || {}).join(' - ')}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-center p-2 bg-green-100 dark:bg-green-900/30 rounded">
-                                    <div className="text-lg font-semibold text-green-800 dark:text-green-200">
-                                      🏆 Winner: {gameSession.participants.find(p => p.user.id === scoreData.winner)?.user.username || 'Unknown'}
-                                    </div>
-                                    <div className="text-sm text-green-600 dark:text-green-300">
-                                      Final Score: {Object.values(scoreData.goals || {}).join(' - ')}
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                                  {Object.entries(scoreData.goals || {}).map(([userId, goals]) => {
-                                    const participant = gameSession.participants.find(p => p.user.id === userId)
-                                    return (
-                                      <div key={userId} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-600 rounded">
-                                        <span className="text-sm font-medium">
-                                          {participant?.user.username || 'Unknown'}
-                                        </span>
-                                        <span className="text-sm font-bold">
-                                          {goals as number} goals
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                                {scoreData.matchDuration && (
-                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                    ⏱️ Match Duration: {scoreData.matchDuration}
-                                  </div>
-                                )}
-                                {scoreData.notes && (
-                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                    📝 Notes: {scoreData.notes}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div>
+                  {getStatusBadge(gameSession.sessionStatus || (gameSession.isActive ? 'ACTIVE' : 'INACTIVE'))}
+                </div>
               </div>
 
+              {!isParticipant && (
+                <div className="glass-light rounded-xl p-6 mb-6">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Not a Participant</h3>
+                      <p className="text-purple-200">You're not currently part of this session.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={joinSession}
+                    disabled={isJoining}
+                    className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+                  >
+                    {isJoining ? 'Joining...' : 'Join Session'}
+                  </button>
+                </div>
+              )}
+
               {/* Participants */}
-              <div className="bg-white shadow rounded-lg p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Participants ({gameSession.participants.length})
-                </h3>
-                <div className="space-y-3">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Participants ({gameSession.participants.length})</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {gameSession.participants.map((participant) => (
-                    <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={participant.id} className="glass-light rounded-xl p-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                        <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold">
                           {(participant.user.username || participant.user.email).charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {participant.user.username ? (
-                              <Link 
-                                href={`/profile/${participant.user.username}`}
-                                className="hover:text-indigo-600"
-                              >
-                                {participant.user.username}
-                              </Link>
-                            ) : (
-                              participant.user.email
-                            )}
-                            {participant.user.id === gameSession.createdBy.id && (
-                              <span className="ml-2 text-xs text-indigo-600">(Creator)</span>
-                            )}
-                            {participant.user.id === session.user.id && (
-                              <span className="ml-2 text-xs text-green-600">(You)</span>
-                            )}
+                        <div className="flex-1">
+                          <p className="text-white font-medium">
+                            {participant.user.username || participant.user.email}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-purple-300 text-sm">
                             Joined {new Date(participant.joinedAt).toLocaleDateString()}
                           </p>
                         </div>
+                        {participant.user.id === gameSession.createdBy.id && (
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                            Creator
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* QR Code and Actions */}
-            <div className="space-y-4 lg:space-y-6 order-1 lg:order-2">
-              <div className="bg-white shadow rounded-lg p-4 sm:p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Share Session</h3>
-                <div className="text-center">
-                  <img
-                    src={generateQRCodeUrl(gameSession.code)}
-                    alt="Session QR Code"
-                    className="mx-auto border rounded-lg mb-2 w-32 h-32 sm:w-auto sm:h-auto"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Scan to join session
-                  </p>
-                  <div className="mt-4">
-                    <input
-                      type="text"
-                      value={`${window.location.origin}/session/${gameSession.code}`}
-                      readOnly
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-md bg-gray-50 break-all"
-                    />
-                  </div>
+              {/* Score Submission */}
+              {canSubmitScore && (
+                <div className="mb-6">
+                  <button
+                    onClick={() => setShowScoreForm(!showScoreForm)}
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+                  >
+                    {showScoreForm ? 'Cancel Score Submission' : 'Submit Score'}
+                  </button>
+                  
+                  {showScoreForm && (
+                    <div className="glass-light rounded-xl p-6 mt-4">
+                      <h3 className="text-lg font-semibold text-white mb-4">Submit Match Score</h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-purple-200 text-sm font-medium mb-2">Winner</label>
+                          <select
+                            value={scoreFormData.winner}
+                            onChange={(e) => setScoreFormData(prev => ({ ...prev, winner: e.target.value }))}
+                            className="w-full bg-gray-800/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            <option value="">Select winner...</option>
+                            {gameSession.participants.map((p) => (
+                              <option key={p.user.id} value={p.user.id}>
+                                {p.user.username || p.user.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-purple-200 text-sm font-medium mb-2">Goals per Player</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {gameSession.participants.map((p) => (
+                              <div key={p.user.id} className="flex items-center space-x-3">
+                                <span className="text-purple-200 text-sm flex-1">
+                                  {p.user.username || p.user.email}
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={scoreFormData.goals[p.user.id] || 0}
+                                  onChange={(e) => updateGoals(p.user.id, parseInt(e.target.value) || 0)}
+                                  className="w-20 bg-gray-800/50 border border-purple-500/30 rounded-lg px-3 py-1 text-white text-center focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-purple-200 text-sm font-medium mb-2">Match Duration</label>
+                          <select
+                            value={scoreFormData.matchDuration}
+                            onChange={(e) => setScoreFormData(prev => ({ ...prev, matchDuration: e.target.value }))}
+                            className="w-full bg-gray-800/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            <option value="90 minutes">90 minutes</option>
+                            <option value="60 minutes">60 minutes</option>
+                            <option value="45 minutes">45 minutes</option>
+                            <option value="30 minutes">30 minutes</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-purple-200 text-sm font-medium mb-2">Notes (Optional)</label>
+                          <textarea
+                            value={scoreFormData.notes}
+                            onChange={(e) => setScoreFormData(prev => ({ ...prev, notes: e.target.value }))}
+                            rows={3}
+                            className="w-full bg-gray-800/50 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            placeholder="Any additional notes about the match..."
+                          />
+                        </div>
+                        
+                        <button
+                          onClick={submitScore}
+                          disabled={isSubmittingScore || !scoreFormData.winner}
+                          className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+                        >
+                          {isSubmittingScore ? 'Submitting...' : 'Submit Score'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {isCreator && (
-                <div className="bg-white shadow rounded-lg p-4 sm:p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Session Controls</h3>
-                  <div className="space-y-2">
-                    <button 
-                      onClick={endSession}
-                      disabled={isEndingSession || !gameSession.isActive}
-                      className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+              {/* Score Confirmation */}
+              {canConfirmScore && gameSession.result && (
+                <div className="glass-light rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">Confirm Score</h3>
+                  <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                    <h4 className="text-purple-200 font-medium mb-2">Submitted Score:</h4>
+                    <div className="space-y-2 text-sm text-purple-300">
+                      <p>Winner: {gameSession.participants.find(p => p.user.id === gameSession.result?.scoreData.winner)?.user.username || 'Unknown'}</p>
+                      <p>Duration: {gameSession.result.scoreData.matchDuration}</p>
+                      {gameSession.result.scoreData.notes && (
+                        <p>Notes: {gameSession.result.scoreData.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => confirmScore('approve')}
+                      disabled={isConfirming}
+                      className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
                     >
-                      {isEndingSession ? 'Ending...' : 'End Session'}
+                      {isConfirming ? 'Confirming...' : 'Approve'}
                     </button>
-                    <button 
-                      onClick={deleteSession}
-                      disabled={isDeletingSession}
-                      className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                    <button
+                      onClick={() => confirmScore('reject')}
+                      disabled={isConfirming}
+                      className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
                     >
-                      {isDeletingSession ? 'Deleting...' : 'Delete Session'}
+                      {isConfirming ? 'Confirming...' : 'Reject'}
                     </button>
                   </div>
                 </div>
               )}
+
+                             {/* Session Result */}
+               {hasResult && gameSession.result && (
+                 <div className="glass-light rounded-xl p-6">
+                   <h3 className="text-lg font-semibold text-white mb-4">Match Result</h3>
+                   <div className="bg-gray-800/50 rounded-lg p-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                       <div>
+                         <p className="text-purple-200 text-sm">Status</p>
+                         <p className="text-white font-medium">{gameSession.result.status}</p>
+                       </div>
+                       <div>
+                         <p className="text-purple-200 text-sm">Submitted</p>
+                         <p className="text-white font-medium">{new Date(gameSession.result.createdAt).toLocaleDateString()}</p>
+                       </div>
+                     </div>
+                     {gameSession.result.scoreData && (
+                       <div className="mt-4 pt-4 border-t border-purple-500/30">
+                         <h4 className="text-purple-200 font-medium mb-4">Score Details:</h4>
+                         
+                         {/* Winner Highlight */}
+                         <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-4 mb-4">
+                           <div className="flex items-center space-x-3">
+                             <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
+                               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                               </svg>
+                             </div>
+                             <div>
+                               <p className="text-yellow-200 text-sm font-medium">🏆 WINNER</p>
+                               <p className="text-white text-lg font-bold">
+                                 {gameSession.participants.find(p => p.user.id === gameSession.result?.scoreData.winner)?.user.username || 'Unknown'}
+                               </p>
+                             </div>
+                           </div>
+                         </div>
+                         
+                         {/* Match Details */}
+                         <div className="space-y-3">
+                           <div className="flex justify-between items-center bg-gray-700/50 rounded-lg p-3">
+                             <span className="text-purple-200 text-sm">Duration</span>
+                             <span className="text-white font-medium">{gameSession.result.scoreData.matchDuration}</span>
+                           </div>
+                           
+                           {/* Goals Breakdown */}
+                           <div className="bg-gray-700/50 rounded-lg p-3">
+                             <p className="text-purple-200 text-sm mb-2">Goals Scored:</p>
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                               {Object.entries(gameSession.result.scoreData.goals || {}).map(([userId, goals]) => {
+                                 const participant = gameSession.participants.find(p => p.user.id === userId)
+                                 const isWinner = userId === gameSession.result?.scoreData.winner
+                                 return (
+                                   <div key={userId} className={`flex justify-between items-center p-2 rounded ${
+                                     isWinner ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30' : 'bg-gray-600/50'
+                                   }`}>
+                                     <span className={`text-sm font-medium ${
+                                       isWinner ? 'text-yellow-200' : 'text-white'
+                                     }`}>
+                                       {participant?.user.username || 'Unknown'}
+                                       {isWinner && ' 🏆'}
+                                     </span>
+                                     <span className={`text-sm font-bold ${
+                                       isWinner ? 'text-yellow-200' : 'text-white'
+                                     }`}>
+                                       {goals as number} goals
+                                     </span>
+                                   </div>
+                                 )
+                               })}
+                             </div>
+                           </div>
+                           
+                           {gameSession.result.scoreData.notes && (
+                             <div className="bg-gray-700/50 rounded-lg p-3">
+                               <p className="text-purple-200 text-sm mb-2">Notes:</p>
+                               <p className="text-white text-sm">{gameSession.result.scoreData.notes}</p>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               )}
+
+              {/* Session Actions */}
+              {isCreator && (
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {gameSession.isActive && (
+                    <button
+                      onClick={endSession}
+                      disabled={isEndingSession}
+                      className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+                    >
+                      {isEndingSession ? 'Ending...' : 'End Session'}
+                    </button>
+                  )}
+                  <button
+                    onClick={deleteSession}
+                    disabled={isDeletingSession}
+                    className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200"
+                  >
+                    {isDeletingSession ? 'Deleting...' : 'Delete Session'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            {/* QR Code */}
+            <div className="glass rounded-2xl p-6 mb-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Session QR Code</h3>
+              <div className="text-center">
+                <img
+                  src={generateQRCodeUrl(gameSession.code)}
+                  alt="Session QR Code"
+                  className="border-2 border-purple-500/30 rounded-xl w-full max-w-48 mx-auto"
+                />
+                <p className="text-purple-200 text-sm mt-2">Share this code with friends to join</p>
+              </div>
+            </div>
+
+            {/* Session Stats */}
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Session Info</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-purple-200">Game</span>
+                  <span className="text-white font-medium">{gameSession.game.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-200">Participants</span>
+                  <span className="text-white font-medium">{gameSession.participants.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-200">Created</span>
+                  <span className="text-white font-medium">{new Date(gameSession.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-200">Status</span>
+                  <span className="text-white font-medium">{gameSession.isActive ? 'Active' : 'Inactive'}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
