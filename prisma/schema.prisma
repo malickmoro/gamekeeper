@@ -66,6 +66,10 @@ model User {
   // Application relations
   gameSessions GameSession[] @relation("CreatedSessions")
   participants Participant[]
+  
+  // Friendship relations
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
 }
 
 model Game {
@@ -109,4 +113,17 @@ model Result {
   status        String      // 'PENDING', 'APPROVED', 'REJECTED', 'VOID'
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+}
+
+model FriendRequest {
+  id          String   @id @default(cuid())
+  fromUser    User     @relation("SentFriendRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  toUser      User     @relation("ReceivedFriendRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  status      String   @default("PENDING") // 'PENDING', 'ACCEPTED', 'REJECTED'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([fromUserId, toUserId])
 }
