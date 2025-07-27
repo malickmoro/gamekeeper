@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import QRScanner from '@/components/QRScanner'
+import FriendRequestBadge from '@/components/FriendRequestBadge'
 
 interface Game {
   id: string
@@ -190,6 +191,13 @@ export default function Home() {
                   className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium text-center"
                 >
                   Find Friends
+                </Link>
+                <Link
+                  href="/friends"
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium text-center relative"
+                >
+                  Friend Requests
+                  <FriendRequestBadge />
                 </Link>
                 <Link
                   href="/history"
