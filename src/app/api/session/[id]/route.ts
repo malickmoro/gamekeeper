@@ -129,4 +129,147 @@ export async function GET(
       { status: 500 }
     )
   }
+}
+
+// PATCH - End/Deactivate session
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const { id: sessionId } = await params
+    const body = await request.json()
+    const { action } = body
+
+    // Find the game session by ID or code
+    const gameSession = await prisma.gameSession.findFirst({
+      where: {
+        OR: [
+          { id: sessionId },
+          { code: sessionId }
+        ]
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true
+          }
+        }
+      }
+    })
+
+    if (!gameSession) {
+      return NextResponse.json(
+        { error: "Session not found" },
+        { status: 404 }
+      )
+    }
+
+    // Only the creator can end/delete the session
+    if (gameSession.createdBy.id !== session.user.id) {
+      return NextResponse.json(
+        { error: "Only the session creator can perform this action" },
+        { status: 403 }
+      )
+    }
+
+    if (action === 'end') {
+      // End session by setting isActive to false
+      const updatedSession = await prisma.gameSession.update({
+        where: { id: gameSession.id },
+        data: { isActive: false }
+      })
+
+      return NextResponse.json({
+        message: "Session ended successfully",
+        session: updatedSession
+      })
+    } else {
+      return NextResponse.json(
+        { error: "Invalid action. Use 'end' to end the session." },
+        { status: 400 }
+      )
+    }
+  } catch (error) {
+    console.error("Session end error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Delete session permanently
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const { id: sessionId } = await params
+
+    // Find the game session by ID or code
+    const gameSession = await prisma.gameSession.findFirst({
+      where: {
+        OR: [
+          { id: sessionId },
+          { code: sessionId }
+        ]
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true
+          }
+        }
+      }
+    })
+
+    if (!gameSession) {
+      return NextResponse.json(
+        { error: "Session not found" },
+        { status: 404 }
+      )
+    }
+
+    // Only the creator can delete the session
+    if (gameSession.createdBy.id !== session.user.id) {
+      return NextResponse.json(
+        { error: "Only the session creator can delete this session" },
+        { status: 403 }
+      )
+    }
+
+    // Delete the session and all related data (cascade delete will handle participants and results)
+    await prisma.gameSession.delete({
+      where: { id: gameSession.id }
+    })
+
+    return NextResponse.json({
+      message: "Session deleted successfully"
+    })
+  } catch (error) {
+    console.error("Session delete error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
 } 

@@ -90,7 +90,7 @@ model GameSession {
 
 model Participant {
   id            String      @id @default(cuid())
-  gameSession   GameSession @relation(fields: [gameSessionId], references: [id])
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
   gameSessionId String
   user          User        @relation(fields: [userId], references: [id])
   userId        String
@@ -101,7 +101,7 @@ model Participant {
 
 model Result {
   id            String      @id @default(cuid())
-  gameSession   GameSession @relation(fields: [gameSessionId], references: [id])
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
   gameSessionId String      @unique
   enteredById   String
   approvedById  String?

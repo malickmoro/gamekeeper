@@ -58,6 +58,8 @@ export default function SessionPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [isSubmittingScore, setIsSubmittingScore] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
+  const [isEndingSession, setIsEndingSession] = useState(false)
+  const [isDeletingSession, setIsDeletingSession] = useState(false)
   
   // Score form state
   const [showScoreForm, setShowScoreForm] = useState(false)
@@ -226,6 +228,69 @@ export default function SessionPage() {
         winner: winner
       }
     })
+  }
+
+  const endSession = async () => {
+    if (!confirm('Are you sure you want to end this session? This will prevent new participants from joining.')) {
+      return
+    }
+
+    setIsEndingSession(true)
+    setError('')
+
+    try {
+      const response = await fetch(`/api/session/${sessionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'end' }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSuccessMessage('Session ended successfully!')
+        fetchSession() // Refresh session data
+      } else {
+        setError(data.error || 'Failed to end session')
+      }
+    } catch (error) {
+      setError('An error occurred while ending the session')
+    } finally {
+      setIsEndingSession(false)
+    }
+  }
+
+  const deleteSession = async () => {
+    if (!confirm('Are you sure you want to delete this session? This action cannot be undone and will permanently remove all session data.')) {
+      return
+    }
+
+    setIsDeletingSession(true)
+    setError('')
+
+    try {
+      const response = await fetch(`/api/session/${sessionId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSuccessMessage('Session deleted successfully!')
+        // Redirect to home page after a short delay
+        setTimeout(() => {
+          router.push('/')
+        }, 1500)
+      } else {
+        setError(data.error || 'Failed to delete session')
+      }
+    } catch (error) {
+      setError('An error occurred while deleting the session')
+    } finally {
+      setIsDeletingSession(false)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -616,11 +681,19 @@ export default function SessionPage() {
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Session Controls</h3>
                   <div className="space-y-2">
-                    <button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                      End Session
+                    <button 
+                      onClick={endSession}
+                      disabled={isEndingSession || !gameSession.isActive}
+                      className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                    >
+                      {isEndingSession ? 'Ending...' : 'End Session'}
                     </button>
-                    <button className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                      Delete Session
+                    <button 
+                      onClick={deleteSession}
+                      disabled={isDeletingSession}
+                      className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium"
+                    >
+                      {isDeletingSession ? 'Deleting...' : 'Delete Session'}
                     </button>
                   </div>
                 </div>
